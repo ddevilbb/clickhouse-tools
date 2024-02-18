@@ -1,0 +1,16 @@
+###> phpstorm ###
+/.idea
+/*.local
+
+## Docker
+/.ops/docker/*/local/shared
+/.ops/docker/*/local/logs
+
+## GO
+build
+vendor
+
+# local env files
+goapp/.env
+.env.local
+.env.*.local

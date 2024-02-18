@@ -1,0 +1,27 @@
+= Clickhouse Tools
+
+== Установка
+1. Собираем контейнеры `make build`
+1. Поднимаем контейнеры `make up`
+
+== Makefile Команды
+1. `make build` - сборка контейнеров
+1. `make up` - создание и запуск контейнеров
+1. `make down` - остановка и удаление контейнеров
+1. `make start` - запуск контейнеров
+1. `make stop` - остановка контейнеров
+1. `make ps` - просмотр состояния контейнеров
+1. `make logs tools` - просмотр логов контейнера tools
+1. `make exec tools bash` - запуск команды внутри контейнера
+
+== Команды clickhouse-tools
+1. `clickhouse-tools backup -db=<database_name>` - создание бекапа
+1. `clickhouse-tools upload -s=(rsync|s3) <backup_name>` - загрузка созданного бекапа в удалённое хранилище(s3 или rsync)
+1. `clickhouse-tools list` - список созданных бекапов
+1. `clickhouse-tools list -s=(rsync|s3) remote` - список бекапов в удалённом хранилище
+1. `clickhouse-tools download -s=(rsync|s3) <backup_name>` - скачивание бекапа с удалённого хранилища
+1. `clickhouse-tools restore -db=<database_name> -c=<cluster_name> <backup_name>` - восстановление бекапа
+1. `clickhouse-tools clusters -db=<database_name>` - вывод списка кластеров
+1. `clickhouse-tools task -s=(rsync|s3) -db=<database_name>` - запуск таска по создание бекапа и его загрузки в удалённое хранилище
+1. `clickhouse-tools databases` - вывод списка баз данных
+1. `clickhouse-tools help` - вывод справки по команде

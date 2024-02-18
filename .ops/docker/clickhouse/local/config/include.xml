@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<yandex>
+    <remote_servers>
+        <ch_cluster>
+            <shard>
+                <replica>
+                    <host>clickhouse1</host>
+                    <port>9000</port>
+                </replica>
+                <replica>
+                    <host>clickhouse2</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </ch_cluster>
+    </remote_servers>
+    <zookeeper>
+        <node>
+            <host>zoo1</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+    <macros>
+        <shard>1</shard>
+        <replica from_env="CLICKHOUSE_HOST"/>
+    </macros>
+    <clickhouse_compression>
+        <!-- Set of variants. Checked in order. Last matching case wins. If nothing matches, lz4 will be used. -->
+        <case>
+            <!-- Conditions. All must be satisfied. Some conditions may be omitted. -->
+            <min_part_size>10000000000</min_part_size>        <!-- Min part size in bytes. -->
+            <min_part_size_ratio>0.01</min_part_size_ratio>    <!-- Min size of part relative to whole table size. -->
+            <!-- What compression method to use. -->
+            <method>zstd</method>    <!-- Keep in mind that zstd compression library is highly experimental. -->
+        </case>
+    </clickhouse_compression>
+</yandex>

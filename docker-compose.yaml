@@ -1,0 +1,158 @@
+version: "3.7"
+
+services:
+  tools:
+    container_name: tools
+    build:
+      context: .
+      dockerfile: .ops/docker/tools/local/Dockerfile
+    volumes:
+      - ./goapp:/go/src/app
+    security_opt:
+      - "seccomp:unconfined"
+    cap_add:
+      - SYS_PTRACE
+    ports:
+      - "12345:2345"
+
+  zoo1:
+    image: zookeeper:3.4.10
+    container_name: zoo
+    hostname: zoo1
+    restart: always
+    ports:
+      - "32181:2181"
+    environment:
+      ZOO_INIT_LIMIT: 300
+      ZOO_SYNC_LIMIT: 10
+      ZOO_MAX_CLIENT_CNXNS: 2000
+      ZOO_STANDALONE_ENABLED: 'true'
+      ZOO_CFG_EXTRA: 'reconfigEnabled=true skipACL=yes'
+      ZOO_4LW_COMMANDS_WHITELIST: 'stat'
+      ZOO_AUTOPURGE_PURGEINTERVAL: 1
+      ZOO_AUTOPURGE_SNAPRETAINCOUNT: 10
+
+  clickhouse1:
+    container_name: db1
+    build:
+      context: .
+      dockerfile: .ops/docker/clickhouse/local/Dockerfile
+    hostname: clickhouse1
+    volumes:
+      - .ops/docker/clickhouse/local/config/config.xml:/etc/clickhouse-server/config.xml
+      - .ops/docker/clickhouse/local/config/include.xml:/etc/clickhouse-server/include.xml
+      - .ops/docker/clickhouse/local/config/users.xml:/etc/clickhouse-server/users.xml
+      - .ops/docker/clickhouse/local/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
+      - ./goapp/build/:/usr/local/bin/clickhouse-tools
+      - ssh_pub_key:/root/.ssh/
+    environment:
+      CLICKHOUSE_HOST: 'clickhouse1'
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USERNAME}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS: true
+    env_file:
+      - goapp/.env.dist
+    restart: always
+    ports:
+      - "18123:8123"
+    depends_on:
+      - tools
+      - zoo1
+
+  clickhouse2:
+    container_name: db2
+    build:
+      context: .
+      dockerfile: .ops/docker/clickhouse/local/Dockerfile
+    hostname: clickhouse2
+    volumes:
+      - .ops/docker/clickhouse/local/config/config.xml:/etc/clickhouse-server/config.xml
+      - .ops/docker/clickhouse/local/config/include.xml:/etc/clickhouse-server/include.xml
+      - .ops/docker/clickhouse/local/config/users.xml:/etc/clickhouse-server/users.xml
+      - .ops/docker/clickhouse/local/docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
+      - ./goapp/build/:/usr/local/bin/clickhouse-tools
+      - ssh_pub_key:/root/.ssh/
+    environment:
+      CLICKHOUSE_HOST: 'clickhouse2'
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USERNAME}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_ALWAYS_RUN_INITDB_SCRIPTS: true
+    restart: always
+    depends_on:
+      - tools
+      - zoo1
+    ports:
+      - "28123:8123"
+
+  rsync:
+    image: axiom/rsync-server:latest
+    container_name: rsync
+    hostname: rsync
+    volumes:
+      - .ops/docker/rsync/local/shared/:${RSYNC_REMOTE_PATH}
+      - ssh_pub_key:/root/.ssh/
+    environment:
+      USERNAME: ${RSYNC_USERNAME}
+      PASSWORD: ${RSYNC_PASSWORD}
+      VOLUME: ${RSYNC_REMOTE_PATH}
+      ALLOW: 0.0.0.0/32 192.168.224.0/28 127.0.0.1/32
+    ports:
+      - "8001:872"
+      - "9022:22"
+    depends_on:
+      - clickhouse1
+      - clickhouse2
+
+  s3:
+    image: zenko/cloudserver
+    container_name: s3
+    hostname: s3
+    ports:
+      - "8000:8000"
+    volumes:
+      - .ops/docker/s3/local/shared/data:/usr/src/app/localData
+      - .ops/docker/s3/local/shared/metadata:/usr/src/app/localMetadata
+      - .ops/docker/s3/local/config/authdata.json:/usr/src/app/conf/authdata.json
+    environment:
+      ENDPOINT: s3
+      REMOTE_MANAGEMENT_DISABLE: 1
+
+  create-bucket:
+    image: amazon/aws-cli
+    container_name: create-bucket
+    environment:
+      - AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_WRITE}
+      - AWS_SECRET_ACCESS_KEY=${S3_SECRET_KEY_WRITE}
+    entrypoint: [ "/root/scripts/wait-for-it/wait-for-it.sh", "s3:8000", "-t", "30", "--" ]
+    volumes:
+      - .ops/docker/s3/local/wait-for-it.sh:/root/scripts/wait-for-it/wait-for-it.sh
+    command: aws s3api create-bucket --bucket bucket --endpoint-url http://s3:8000 --acl public-read
+    depends_on:
+      - s3
+
+  elk:
+    container_name: elk
+    image: sebp/elk:683
+    ports:
+      - "5601:5601"
+      - "9200:9200"
+      - "5044:5044"
+      - "5044:5044/udp"
+    volumes:
+      - .ops/docker/elk/logstash/conf.d:/etc/logstash/conf.d
+
+volumes:
+  ssh_pub_key:
+
+networks:
+  default:
+    name: clickhouse-tools
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.224.0/28

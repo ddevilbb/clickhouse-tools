@@ -1,0 +1,4 @@
+.git
+.idea
+!.ops/docker/tools/deploy/entrypoint.sh
+!.ops/docker/tools/deploy/deploy.sh
